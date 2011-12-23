@@ -1,0 +1,278 @@
+PARSER_BEGIN(Parser)
+
+package CCAlgorithm.parser;
+
+import CCAlgorithm.bean.*;
+import java.util.*;
+
+/**
+* Parser that generates the DAG and other sets in order to implement
+* the Congruence Closure Algorithm to decide (T_eq U T_cons)-satisfiability
+* of quantifier-free formulae 
+* @author Enrico Scapin
+*/
+public class Parser{
+	/**
+	 * Contains the functions already read
+	 */
+	private static Map<String,Integer> functions;
+	
+	/**
+	 * Contains the predicates already read
+	 */
+	private static Map<String,Integer> predicates;
+	
+	/**
+	 * Contains all information that are extrapolate from the formula
+	 * in order to perform the Congruent Closure Algorithm
+	 */ 
+	private static CCobject ccObj;
+	
+	/**
+	* Parser of quatifier-free formulae.
+	*
+	*@param input quantifier-free formulae
+	*@param ccObj a "container" object for all the structures created 
+	* by this parser
+	*/
+	public static void parsing(String input, CCobject cc) throws Exception{
+		ccObj=cc;
+		functions		= new HashMap<String, Integer>();
+		predicates		= new HashMap<String, Integer>();
+		
+		try{	
+			new Parser(new java.io.StringReader(input)).FORMULA();
+		}catch(Throwable e){
+			// Catching Throwable is ugly but JavaCC throws Error objects!
+			ccObj.dag=null;
+			throw new ParseException("Syntax check failed: " + e.getMessage());
+		}
+    }
+    
+    private static Node insertVar(String imgToken){
+		if(!ccObj.dag.containsKey(imgToken)){
+			Node node=new Node(imgToken, imgToken);
+			ccObj.dag.put(imgToken, node);
+			return node;
+		}
+		else
+			return ccObj.dag.get(imgToken);
+	}
+	
+	private static void insertEqual(Node n1, Node n2){
+		ccObj.equalTerm.add(new TermPair(n1.getId(), n2.getId()));
+	}
+	
+	private static void insertNotEqual(Node n1, Node n2){
+		/*
+		 * In order to perform this heuristics:
+		 * if the algorithm tries to merge two terms that are 
+		 * in inequality's relation, return unsatisfiable
+		 */
+		n1.addBanned(n2.getId());
+		n2.addBanned(n1.getId());
+		ccObj.notEqualTerm.add(new TermPair(n1.getId(), n2.getId()));
+	}
+
+}
+PARSER_END(Parser)
+
+
+// "\r" --> backspace
+SKIP:  { " " | "\t" | "\n" | "\r" }
+TOKEN: { "-" | "(" | ")" | ";" | ","
+		| <EqNotEq: "=" | "!=" >
+		| "atom" | "cons" | <CADR: "car" | "cdr">
+		| <PRED: (["A"-"Z"])+(["0"-"9"])*>
+		| <FUNVAR: (["A"-"Z"])*(["a"-"z"])+(["a"-"z","A"-"Z"])*(["0"-"9"])*>
+		//| <FUN: (["A"-"Z"])+(["a"-"z"])+(["0"-"9"])*>
+		//| <VAR: ((["a"-"z"])+(["0"-"9"])*)>
+		}
+
+void FORMULA(): {}
+{
+	EXPRESSION() <EOF>
+}
+/** 
+ * Set of clauses
+ */
+void EXPRESSION():{}
+{
+	CLAUSE() (";" (CLAUSE())? )* 
+}
+
+/**
+ * Process a clauses
+ */ 
+void CLAUSE(): 
+	{	Token token, t=null;
+	  	Node n1, n2, n3, n4;
+		String s1, s2, keyNode;
+		List<Node> arguments;
+	}
+{
+	n1=TERM() token=<EqNotEq> n2=TERM()
+	{
+		if(token.image.equals("=")){
+			ccObj.incrEq();
+			insertEqual(n1, n2);
+		}
+		else{
+			ccObj.incrNotEq();
+			insertNotEqual(n1, n2);
+		}
+	}
+	| "atom" "(" n1=TERM() ")"
+	{
+		ccObj.incrAtomPos();
+		ccObj.atomTerm.add(n1.getId());
+	}
+	| LOOKAHEAD(2) "-" "atom" "(" n1=TERM() ")"
+	{
+		ccObj.incrAtomNeg();
+		if(!ccObj.notAtomTerm.contains(n1.getId())){
+			ccObj.notAtomTerm.add(n1.getId());
+			s1="fv_" + (ccObj.numAtomNeg()*2-1);
+			s2="fv_" + (ccObj.numAtomNeg()*2);
+			n3=insertVar(s1);
+			n4=insertVar(s2);
+			keyNode=  "cons(" + s1 + "," + s2 + ")";
+			/* in order to keep corrispondence between cons "artificial" node and
+			 * -atom predicates
+			 */
+			ccObj.addCons(keyNode, "-atom(" + n1.getId() + ")");
+			n2=ccObj.dag.get(keyNode);
+			if(n2==null){
+				n2=new Node(keyNode, "cons");
+				ccObj.dag.put(keyNode, n2);
+				ccObj.consTerm.add(keyNode); // in order to maintain "cons" nodes' set
+				n2.addArg(s1);
+				n2.addArg(s2);
+				n3.addParent(keyNode);
+				n4.addParent(keyNode);
+				ccObj.incrEdges();
+				ccObj.incrEdges();
+			}
+			// n1, n2
+			insertEqual(n1, n2);
+		}
+	}
+	| (t="-")? token=<PRED> "(" n1=TERM() {arguments=new LinkedList<Node>(); arguments.add(n1);} 
+		("," n2=TERM() {arguments.add(n2);} )* ")"
+	{
+		/* check if a predicate with that name 
+		 * but different arguments' number has been already read
+		 */
+		Integer p=(Integer) predicates.get(token.image);
+		if(p!=null){ 
+			if(p.intValue()!=arguments.size())
+				throw new ParseException("The predicate \"" + token.image 
+					+ "\" has been already read with " + p.intValue() + " argument(s)");
+		}
+		else
+			predicates.put(token.image, new Integer(arguments.size()));	
+		
+		s1="";
+		for(Node n: arguments)
+			s1+= n.getId() + ","; 
+		s1=s1.substring(0,s1.length()-1);
+		keyNode="p_" + token.image + "(" + s1 + ")";
+		n1=ccObj.dag.get(keyNode);
+		if(n1==null){
+			n1=new Node(keyNode, "p_" + token.image);
+			ccObj.dag.put(keyNode, n1);
+			for(Node a: arguments){
+				n1.addArg(a.getId());
+				a.addParent(keyNode);
+				ccObj.incrEdges();
+			}
+		}	
+		n2=insertVar("#");
+		// n1 n2 t
+		if(t==null){
+			ccObj.incrPredPos();
+			insertEqual(n1, n2);
+		}else{
+			ccObj.incrPredNeg();
+			insertNotEqual(n1, n2);
+		}
+	}
+}
+
+Node TERM(): 
+	{	Token token;
+		Node node, n1, n2;
+		String keyNode, id1, id2;
+		List<Node> arguments;
+	}
+{
+	token=<CADR> "(" n1=TERM() ")"	 	
+	{
+		id1=n1.getId();
+		keyNode= token.image + "(" + id1 + ")";
+		node=ccObj.dag.get(keyNode);
+		if(node==null){
+			node=new Node(keyNode, token.image);
+		  	ccObj.dag.put(keyNode, node);
+		  	node.addArg(id1);
+		  	n1.addParent(keyNode);
+		  	ccObj.incrEdges();
+		}
+		return node;
+	}
+	| token="cons" "(" n1=TERM() "," n2=TERM() ")"
+	{
+		id1=n1.getId();
+		id2=n2.getId();
+		keyNode= token.image + "(" + id1 + "," + id2 + ")";
+		node=ccObj.dag.get(keyNode);
+		if(node==null){
+			node=new Node(keyNode, token.image);
+			ccObj.dag.put(keyNode, node);
+			ccObj.consTerm.add(keyNode); // in order to maintain a "cons" nodes' List
+			node.addArg(id1);
+			node.addArg(id2);
+			n1.addParent(keyNode);
+			n2.addParent(keyNode);
+			ccObj.incrEdges();
+			ccObj.incrEdges();
+		}
+		return node;
+	}
+	| token=<FUNVAR> {arguments=new ArrayList<Node>();} ( "(" n1=TERM() {arguments.add(n1);} 
+		("," n2=TERM() {arguments.add(n2);} )* ")" )?
+	{	
+			if(arguments.size()==0) // the token is a variable/costant
+				return insertVar(token.image);
+			else{					// the token is an uninterpreted function
+				/* check if a function with that name 
+				 * but different arguments' number has been already read
+				 */
+				Integer f=(Integer) functions.get(token.image);
+				if(f!=null){ 
+					if(f.intValue()!=arguments.size())
+						throw new ParseException("The function \"" + token.image 
+							+ "\" has been already read with " + f.intValue() + " argument(s)");
+				}
+				else
+					functions.put(token.image, new Integer(arguments.size()));
+				
+				String s="";
+				for(Node a: arguments)
+					s+= a.getId() + ","; 
+				s=s.substring(0,s.length()-1);
+				keyNode=token.image + "(" + s + ")";
+				node=(ccObj.dag.get(keyNode));
+				if(node==null){
+					node=new Node(keyNode, token.image);
+					ccObj.dag.put(keyNode, node);
+					for(Node a: arguments){
+						node.addArg(a.getId());
+						a.addParent(keyNode);
+						ccObj.incrEdges();
+					}
+				}
+				return node;
+			}
+	}
+}

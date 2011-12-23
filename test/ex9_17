@@ -1,0 +1,1 @@
+Fu(a)!=a; Fu(Fu(Fu(a)))=a; Fu(Fu(Fu(Fu(Fu(a)))))=a

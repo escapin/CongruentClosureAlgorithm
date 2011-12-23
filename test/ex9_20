@@ -1,0 +1,1 @@
+car(x)=car(y); cdr(x)=cdr(y); Fu(x)!=Fu(y); -atom(x); -atom(y);

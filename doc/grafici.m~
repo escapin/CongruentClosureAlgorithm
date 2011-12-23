@@ -1,0 +1,25 @@
+close all
+clear all
+clc
+nodeRand=[42 101 163 221 255 337 644 767 1117 1500 2578 3752 4534 5253 5785];
+timeRand=[0 20 30 30 40 80 120 180 5190 14040 32710 86510 173350 223540 238650];
+timeRand_H=[2 10 12 20 30 50 80 100 160 290 380 340 250 570 320];
+figure
+semilogy(nodeRand, timeRand, '-b', nodeRand, timeRand_H, '--r');
+grid on
+xlabel('number nodes');
+ylabel('time (log)');
+hleg=legend('Nelson Oppen','NelsonOppen+Heur');
+set(hleg,'Location','NorthWest');
+
+
+nodeSodd=[38 84 57 234 349 389 743 1164 1272 1915 2155 3685 5004 16530 5842];
+timeSodd=[0 2 14 40 110 80 410 910 6180 24610 23460 78920 264730 269060 287430];
+timeSodd_H=[0 10 19 30 100 50 260 490 540 1130 2620 5320 9520 13670 16530];
+figure
+semilogy(nodeSodd, timeSodd, '-b', nodeSodd, timeSodd_H, '--r');
+grid on
+xlabel('number nodes');
+ylabel('time (log)');
+hleg=legend('Nelson Oppen','NelsonOppen+Heur');
+set(hleg,'Location','NorthWest');

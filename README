@@ -1,0 +1,25 @@
+To compile this application:
+	make all
+
+Usage:	
+		java -jar CCAlgorithm.jar [-h] "formula"
+		java -jar CCAlgorithm.jar [-h] filePath
+
+	-h		enable heuristics during the computation of Nelson-Oppen algorithm
+
+Remember to put quotes if you insert a formula by command line.
+In 'test/' directory you can find some examples in order to test this application.
+
+
+To generate new formulae you can compile and execute formulaGenerator.java:
+Usage:
+		java formulaGenerator CLAUSES MAX_RECURSION_DEPTH
+		java formulaGenerator EQUALITIES DISEQUALITIES MAX_RECURSION_DEPTH
+		java formulaGenerator EQUALITIES DISEQUALITIES ATOM NOT_ATOM MAX_RECURSION_DEPTH
+		java formulaGenerator EQUALITIES DISEQUALITIES ATOM NOT_ATOM PRED NOT PRED MAX_RECURSION_DEPTH
+
+
+To execute some tests you can simply execute generatorTest.sh:
+Usage:
+		chmod u+x generatorTest.sh
+		./generatorTest.sh
